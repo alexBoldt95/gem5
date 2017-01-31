@@ -2,12 +2,12 @@
  * @file
  * Definitions of a LFU tag store.
  */
-
-#include "mem/cache/tags/lfu.hh"
+#include <limits>
 
 #include "base/random.hh"
 #include "debug/CacheRepl.hh"
 #include "mem/cache/base.hh"
+#include "mem/cache/tags/lfu.hh"
 
 LFU::LFU(const Params *p)
     : BaseSetAssoc(p)
@@ -31,24 +31,31 @@ LFU::accessBlock(Addr addr, bool is_secure, Cycles &lat, int master_id)
     return blk;
 }
 
+
+
 BaseSetAssoc::BlkType*
 LFU::findVictim(Addr addr)
 {
     BlkType *blk = BaseSetAssoc::findVictim(addr);
+    minBlk = NULL;
+    //find the blk with the least refCount
 
-    // if all blocks are valid, pick a replacement that is not MRU at random
-    if (blk->isValid()) {
-        // find a random index within the bounds of the set
-        int idx = random_mt.random<int>(1, assoc - 1);
+    if (blk->isValid()){
+      int curr_min_refs = std::numeric_limits<int>::max();
+      for (int i = 0; i < assoc; i++){
         assert(idx < assoc);
         assert(idx >= 0);
-        blk = sets[extractSet(addr)].blks[idx];
-
-        DPRINTF(CacheRepl, "set %x: selecting blk %x for replacement\n",
-                blk->set, regenerateBlkAddr(blk->tag, blk->set));
+        blk = sets[extractSet(addr)].blks[i];
+        if (blk->refCount < curr_min_refs){
+          curr_min_refs = blk->refCount;
+          minBlk = blk;
+        }
+      }
+      assert(minBlk);
+      DPRINTF(CacheRepl, "set %x: selecting blk %x for replacement\n",
+              minBlk->set, regenerateBlkAddr(minBlk->tag, minBlk->set));
     }
-
-    return blk;
+    return minBlk;
 }
 
 void
