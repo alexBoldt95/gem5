@@ -35,6 +35,7 @@ SimObject('NMRU.py')
 SimObject('LFU.py')
 SimObject('FIFO.py')
 SimObject('LIFO.py')
+SimObject('DCCR.py')
 
 
 
@@ -45,5 +46,6 @@ Source('nmru.cc')
 Source('lfu.cc')
 Source('fifo.cc')
 Source('lifo.cc')
+Source('dccr.cc')
 Source('random_repl.cc')
 Source('fa_lru.cc')

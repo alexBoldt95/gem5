@@ -8,7 +8,7 @@ class FIFO : public BaseSetAssoc
 {
   public:
     /** Convenience typedef. */
-    typedef FIFOParams Params;
+    //typedef FIFOParams Params;
 
     /**
      * Construct and initialize this tag store.

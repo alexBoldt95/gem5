@@ -8,7 +8,7 @@ class LIFO : public BaseSetAssoc
 {
   public:
     /** Convenience typedef. */
-    typedef LIFOParams Params;
+    //typedef LIFOParams Params;
 
     /**
      * Construct and initialize this tag store.

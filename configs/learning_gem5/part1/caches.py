@@ -35,7 +35,14 @@ line options from each individual class.
 """
 
 from m5.objects import Cache
+from m5.objects import DCCR
 from m5.objects import NMRU
+from m5.objects import LFU
+from m5.objects import FIFO
+from m5.objects import LIFO
+
+
+
 
 from common import SimpleOpts
 
@@ -89,7 +96,7 @@ class L1DCache(L1Cache):
 
     # Set the default size
     size = '64kB'
-    tags = NMRU()
+    tags = DCCR()
 
     SimpleOpts.add_option('--l1d_size',
                           help="L1 data cache size. Default: %s" % size)

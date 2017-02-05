@@ -57,7 +57,7 @@ class LRU : public BaseSetAssoc
 {
   public:
     /** Convenience typedef. */
-    typedef LRUParams Params;
+    //typedef LRUParams Params;
 
     /**
      * Construct and initialize this tag store.

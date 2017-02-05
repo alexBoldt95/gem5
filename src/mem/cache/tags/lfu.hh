@@ -8,7 +8,7 @@ class LFU : public BaseSetAssoc
 {
   public:
     /** Convenience typedef. */
-    typedef LFUParams Params;
+    //typedef LFUParams Params;
 
     /**
      * Construct and initialize this tag store.
