@@ -33,6 +33,9 @@ Import('*')
 SimObject('Tags.py')
 SimObject('NMRU.py')
 SimObject('LFU.py')
+SimObject('FIFO.py')
+SimObject('LIFO.py')
+
 
 
 Source('base.cc')
@@ -40,5 +43,7 @@ Source('base_set_assoc.cc')
 Source('lru.cc')
 Source('nmru.cc')
 Source('lfu.cc')
+Source('fifo.cc')
+Source('lifo.cc')
 Source('random_repl.cc')
 Source('fa_lru.cc')

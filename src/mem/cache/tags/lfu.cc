@@ -37,14 +37,14 @@ BaseSetAssoc::BlkType*
 LFU::findVictim(Addr addr)
 {
     BlkType *blk = BaseSetAssoc::findVictim(addr);
-    minBlk = NULL;
+    BlkType* minBlk = NULL;
     //find the blk with the least refCount
 
     if (blk->isValid()){
       int curr_min_refs = std::numeric_limits<int>::max();
       for (int i = 0; i < assoc; i++){
-        assert(idx < assoc);
-        assert(idx >= 0);
+        assert(i < assoc);
+        assert(i >= 0);
         blk = sets[extractSet(addr)].blks[i];
         if (blk->refCount < curr_min_refs){
           curr_min_refs = blk->refCount;
