@@ -123,6 +123,8 @@ class CacheBlk
 
     Tick tickInserted;
 
+    char mruBit = 0;
+
   protected:
     /**
      * Represents that the indicated thread context has a "lock" on

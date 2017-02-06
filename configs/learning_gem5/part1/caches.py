@@ -96,6 +96,7 @@ class L1DCache(L1Cache):
 
     # Set the default size
     size = '64kB'
+    #assoc = 2
     tags = DCCR()
 
     SimpleOpts.add_option('--l1d_size',

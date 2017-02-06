@@ -17,14 +17,48 @@
 
 
 DCCR::DCCR(const Params *p)
-    : BaseSetAssoc(p),
-    lru_tag(p),
-    lfu_tag(p),
-    fifo_tag(p),
-    lifo_tag(p)
+    : BaseSetAssoc(p)
 {
-  //scores = {0};
   num_policies = 4;
+  historyTableSize = 0;
+  maxHistoryTableSize = 256;
+  /*
+  //mimic initialization of sets for queue_sets
+  queue_sets = new SetType[numSets];
+  queue_blks = new BlkType[numSets * assoc];
+
+  queue_dataBlks = new uint8_t[numBlocks * blkSize];
+
+  unsigned blkIndex = 0;       // index into blks array
+  for (unsigned i = 0; i < numSets; ++i) {
+      queue_sets[i].assoc = assoc;
+
+      queue_sets[i].blks = new BlkType*[assoc];
+
+      // link in the data blocks
+      for (unsigned j = 0; j < assoc; ++j) {
+          // locate next cache block
+          BlkType *blk = &queue_blks[blkIndex];
+          blk->data = &queue_dataBlks[blkSize*blkIndex];
+          ++blkIndex;
+
+          // invalidate new cache block
+          blk->invalidate();
+
+          //EGH Fix Me : do we need to initialize blk?
+
+          // Setting the tag to j is just to prevent long chains in the hash
+          // table; won't matter because the block is invalid
+          blk->tag = j;
+          blk->whenReady = 0;
+          blk->isTouched = false;
+          blk->size = blkSize;
+          queue_sets[i].blks[j]=blk;
+          blk->set = i;
+          blk->way = j;
+      }
+  }
+  */
 }
 
 CacheBlk*
@@ -33,8 +67,19 @@ DCCR::accessBlock(Addr addr, bool is_secure, Cycles &lat, int master_id)
     CacheBlk *blk = BaseSetAssoc::accessBlock(addr, is_secure, lat, master_id);
 
     if (blk != nullptr) {
+      CacheBlk* temp;
         //do not do anything on
         //an access except for returning the block pointer
+        //wipe mruBit
+        for (int i = 0; i < assoc; i++){
+          assert(i < assoc);
+          assert(i >= 0);
+          temp= sets[extractSet(addr)].blks[i];
+          temp->mruBit = 0;
+        }
+        //set mruBit
+        blk->mruBit = 1;
+
         DPRINTF(CacheRepl, "set %x: not moving blk %x (%s) in DCCR ordering\n",
                 blk->set, regenerateBlkAddr(blk->tag, blk->set),
                 is_secure ? "s" : "ns");
@@ -59,23 +104,91 @@ DCCR::accessBlock(Addr addr, bool is_secure, Cycles &lat, int master_id)
     return blk;
 }
 
-unsigned int
-DCCR::getBlockID(Addr addr){
-  unsigned int set = (unsigned int) extractSet(addr);
-  unsigned int tag = (unsigned int) extractTag(addr);
-  unsigned int ret = ((tag) << (tagShift - setShift));
-  ret = ret | set;
-  return ret;
+CacheBlk*
+DCCR::NMRU_findVictim(Addr addr){
+  int set = extractSet(addr);
+  // grab a replacement candidate
+  BlkType *blk = nullptr;
+  for (int i = 0; i < assoc; i++) {
+      BlkType *b = sets[set].blks[i];
+      if (b->mruBit == 1) {
+          blk = b;
+          break;
+      }
+  }
+  assert(!blk || blk->way < allocAssoc);
+
+  if (blk && blk->isValid()) {
+      DPRINTF(CacheRepl, "set %x: selecting NMRU blk %x for replacement\n",
+              set, regenerateBlkAddr(blk->tag, set));
+  }
+
+  return blk;
 }
 
-unsigned int
-DCCR::getBlockID(BlkType* blk){
-  unsigned int set = (unsigned int) blk->set;
-  unsigned int tag = (unsigned int) blk->tag;
-  unsigned int ret = ((tag) << (tagShift - setShift));
-  ret = ret | set;
-  return ret;
+CacheBlk*
+DCCR::LFU_findVictim(Addr addr){
+  BlkType *blk = BaseSetAssoc::findVictim(addr);
+  BlkType* minBlk = nullptr;
+  //find the blk with the least refCount
+
+  if (blk->isValid()){
+    int curr_min_refs = std::numeric_limits<int>::max();
+    for (int i = 0; i < assoc; i++){
+      assert(i < assoc);
+      assert(i >= 0);
+      blk = sets[extractSet(addr)].blks[i];
+      if (blk->refCount < curr_min_refs){
+        curr_min_refs = blk->refCount;
+        minBlk = blk;
+      }
+    }
+    assert(minBlk);
+    DPRINTF(CacheRepl, "set %x: selecting LFU blk %x for replacement\n",
+            minBlk->set, regenerateBlkAddr(minBlk->tag, minBlk->set));
+  }
+  return minBlk;
 }
+
+CacheBlk*
+DCCR::FIFO_findVictim(Addr addr){
+  int set = extractSet(addr);
+  // grab a replacement candidate
+  BlkType *blk = sets[set].blks[0]; //get the front of the list
+  assert(!blk || blk->way < allocAssoc);
+
+  if (blk && blk->isValid()) {
+      DPRINTF(CacheRepl, "set %x: selecting FIFO blk %x for replacement\n",
+              set, regenerateBlkAddr(blk->tag, set));
+  }
+
+  return blk;
+}
+
+CacheBlk*
+DCCR::LIFO_findVictim(Addr addr){
+  int set = extractSet(addr);
+  // grab a replacement candidate
+  //from the back of the list
+  BlkType *blk = nullptr;
+  for (int i = assoc - 1; i >= 0; i--) {
+      BlkType *b = sets[set].blks[i];
+      if (b->way < allocAssoc) {
+          blk = b;
+          break;
+      }
+  }
+  assert(!blk || blk->way < allocAssoc);
+
+  if (blk && blk->isValid()) {
+      DPRINTF(CacheRepl, "set %x: selecting LIFO blk %x for replacement\n",
+              set, regenerateBlkAddr(blk->tag, set));
+  }
+
+  return blk;
+}
+
+
 
 CacheBlk*
 DCCR::findVictim(Addr addr)
@@ -92,14 +205,22 @@ DCCR::findVictim(Addr addr)
     }
   }
 
-  choices[0] = lru_tag.findVictim(addr);
-  choices[1] = lfu_tag.findVictim(addr);
-  choices[2] = fifo_tag.findVictim(addr);
-  choices[3] = lifo_tag.findVictim(addr);
+  choices[0] = NMRU_findVictim(addr);
+  choices[1] = LFU_findVictim(addr);
+  choices[2] = FIFO_findVictim(addr);
+  choices[3] = LIFO_findVictim(addr);
 
+/*
+  choices[0] = sets[set].blks[0];
+  choices[1] = sets[set].blks[0];
+  choices[2] = sets[set].blks[0];
+  choices[3] = sets[set].blks[0];
+*/
   BlkType* repl_blk = choices[chosen_policy_idx];
-  Block_ID_t repl_blk_ID = (Block_ID_t) getBlockID(repl_blk);
-  addToHistoryTable(repl_blk, choices, repl_blk_ID);
+  if (repl_blk != nullptr){
+    Block_ID_t repl_blk_ID = (Block_ID_t) getBlockID(repl_blk);
+    addToHistoryTable(repl_blk, choices, repl_blk_ID);
+  }
 
   if (repl_blk && repl_blk->isValid()) {
       DPRINTF(CacheRepl, "set in DCCR %x: selecting blk %x for replacement\n",
@@ -108,12 +229,23 @@ DCCR::findVictim(Addr addr)
 
   return repl_blk;
 }
+/*
+void
+DCCR::NMRU_insertBlock(PacketPtr pkt, BlkType *blk){
+  int set = extractSet(pkt->getAddr());
+  sets[set].moveToHead(blk);
+}
 
+void
+DCCR::FIFO_insertBlock(PacketPtr pkt, BlkType *blk){
+  int set = extractSet(pkt->getAddr());
+  sets[set].moveToTail(blk); //block should be inserted at tail
+}
+*/
 void
 DCCR::insertBlock(PacketPtr pkt, BlkType *blk)
 {
     BaseSetAssoc::insertBlock(pkt, blk);
-
     int set = extractSet(pkt->getAddr());
     sets[set].moveToTail(blk); //block should be inserted at tail
 }
@@ -122,8 +254,10 @@ void
 DCCR::invalidate(CacheBlk *blk)
 {
     BaseSetAssoc::invalidate(blk);
-
     // should be evicted before valid blocks
+    int set = blk->set;
+    blk->mruBit = 0;
+    sets[set].moveToTail(blk);
     //just invalidate, do not move
 }
 
@@ -131,6 +265,24 @@ DCCR*
 DCCRParams::create()
 {
     return new DCCR(this);
+}
+
+unsigned int
+DCCR::getBlockID(Addr addr){
+  unsigned int set = (unsigned int) extractSet(addr);
+  unsigned int tag = (unsigned int) extractTag(addr);
+  unsigned int ret = ((tag) << (tagShift - setShift));
+  ret = ret | set;
+  return ret;
+}
+
+unsigned int
+DCCR::getBlockID(BlkType* blk){
+  unsigned int set = (unsigned int) blk->set;
+  unsigned int tag = (unsigned int) blk->tag;
+  unsigned int ret = ((tag) << (tagShift - setShift));
+  ret = ret | set;
+  return ret;
 }
 
 victimInfo*
