@@ -20,8 +20,15 @@ DCCR::DCCR(const Params *p)
     : BaseSetAssoc(p)
 {
   num_policies = 4;
+  historyTableNewest = nullptr;
+  historyTableOldest = nullptr;
   historyTableSize = 0;
   maxHistoryTableSize = 256;
+  NMRU_uses = 0;
+  LFU_uses = 0;
+  FIFO_uses = 0;
+  LIFO_uses = 0;
+  findVictim_calls = 0;
   /*
   //mimic initialization of sets for queue_sets
   queue_sets = new SetType[numSets];
@@ -96,6 +103,7 @@ DCCR::accessBlock(Addr addr, bool is_secure, Cycles &lat, int master_id)
         for (int i = 0; i < num_policies; i++) {
           if (evictedInfo->choseToEvict[i] != 0) {
             scores[i] += (maxHistoryTableSize - evictedInfo->value);
+            stat_scores[i] += (maxHistoryTableSize - evictedInfo->value);
           }
         }
       }
@@ -106,30 +114,33 @@ DCCR::accessBlock(Addr addr, bool is_secure, Cycles &lat, int master_id)
 
 CacheBlk*
 DCCR::NMRU_findVictim(Addr addr){
-  int set = extractSet(addr);
-  // grab a replacement candidate
-  BlkType *blk = nullptr;
-  for (int i = 0; i < assoc; i++) {
-      BlkType *b = sets[set].blks[i];
-      if (b->mruBit == 1) {
-          blk = b;
-          break;
-      }
-  }
-  assert(!blk || blk->way < allocAssoc);
+  BlkType *blk = BaseSetAssoc::findVictim(addr);
+  if (blk->isValid()){
+    int set = extractSet(addr);
+    // grab a replacement candidate
 
-  if (blk && blk->isValid()) {
-      DPRINTF(CacheRepl, "set %x: selecting NMRU blk %x for replacement\n",
-              set, regenerateBlkAddr(blk->tag, set));
-  }
+    BlkType *blk = nullptr;
+    for (int i = 0; i < assoc; i++) {
+        BlkType *b = sets[set].blks[i];
+        if (b->mruBit == 0) {
+            blk = b;
+            break;
+        }
+    }
+    assert(!blk || blk->way < allocAssoc);
 
+    if (blk && blk->isValid()) {
+        DPRINTF(CacheRepl, "set %x: selecting NMRU blk %x for replacement\n",
+                set, regenerateBlkAddr(blk->tag, set));
+    }
+  }
   return blk;
 }
 
 CacheBlk*
 DCCR::LFU_findVictim(Addr addr){
   BlkType *blk = BaseSetAssoc::findVictim(addr);
-  BlkType* minBlk = nullptr;
+  BlkType* minBlk = blk;
   //find the blk with the least refCount
 
   if (blk->isValid()){
@@ -138,7 +149,8 @@ DCCR::LFU_findVictim(Addr addr){
       assert(i < assoc);
       assert(i >= 0);
       blk = sets[extractSet(addr)].blks[i];
-      if (blk->refCount < curr_min_refs){
+      if ((blk->refCount < curr_min_refs)
+          && blk->isValid()){
         curr_min_refs = blk->refCount;
         minBlk = blk;
       }
@@ -152,39 +164,43 @@ DCCR::LFU_findVictim(Addr addr){
 
 CacheBlk*
 DCCR::FIFO_findVictim(Addr addr){
-  int set = extractSet(addr);
-  // grab a replacement candidate
-  BlkType *blk = sets[set].blks[0]; //get the front of the list
-  assert(!blk || blk->way < allocAssoc);
+  BlkType *blk = BaseSetAssoc::findVictim(addr);
+  if (blk->isValid()){
+    int set = extractSet(addr);
+    // grab a replacement candidate
+    BlkType *blk = sets[set].blks[0]; //get the front of the list
+    assert(!blk || blk->way < allocAssoc);
 
-  if (blk && blk->isValid()) {
-      DPRINTF(CacheRepl, "set %x: selecting FIFO blk %x for replacement\n",
-              set, regenerateBlkAddr(blk->tag, set));
-  }
-
+    if (blk && blk->isValid()) {
+        DPRINTF(CacheRepl, "set %x: selecting FIFO blk %x for replacement\n",
+                set, regenerateBlkAddr(blk->tag, set));
+    }
+ }
   return blk;
 }
 
 CacheBlk*
 DCCR::LIFO_findVictim(Addr addr){
-  int set = extractSet(addr);
-  // grab a replacement candidate
-  //from the back of the list
-  BlkType *blk = nullptr;
-  for (int i = assoc - 1; i >= 0; i--) {
-      BlkType *b = sets[set].blks[i];
-      if (b->way < allocAssoc) {
-          blk = b;
-          break;
-      }
-  }
-  assert(!blk || blk->way < allocAssoc);
+  BlkType *blk = BaseSetAssoc::findVictim(addr);
+  if (blk->isValid()){
+    int set = extractSet(addr);
+    // grab a replacement candidate
+    //from the back of the list
+    BlkType *blk = nullptr;
+    for (int i = assoc - 1; i >= 0; i--) {
+        BlkType *b = sets[set].blks[i];
+        if (b->way < allocAssoc) {
+            blk = b;
+            break;
+        }
+    }
+    assert(!blk || blk->way < allocAssoc);
 
-  if (blk && blk->isValid()) {
-      DPRINTF(CacheRepl, "set %x: selecting LIFO blk %x for replacement\n",
-              set, regenerateBlkAddr(blk->tag, set));
+    if (blk && blk->isValid()) {
+        DPRINTF(CacheRepl, "set %x: selecting LIFO blk %x for replacement\n",
+                set, regenerateBlkAddr(blk->tag, set));
+    }
   }
-
   return blk;
 }
 
@@ -193,6 +209,7 @@ DCCR::LIFO_findVictim(Addr addr){
 CacheBlk*
 DCCR::findVictim(Addr addr)
 {
+  findVictim_calls++;
   int set = extractSet(addr);
 
   BlkType* choices[num_policies];
@@ -218,6 +235,15 @@ DCCR::findVictim(Addr addr)
 */
   BlkType* repl_blk = choices[chosen_policy_idx];
   if (repl_blk != nullptr){
+    if (chosen_policy_idx == 0){
+      NMRU_uses++;
+    } else if (chosen_policy_idx == 1){
+      LFU_uses++;
+    } else if (chosen_policy_idx == 2){
+      FIFO_uses++;
+    } else if (chosen_policy_idx == 3){
+      LIFO_uses++;
+    }
     Block_ID_t repl_blk_ID = (Block_ID_t) getBlockID(repl_blk);
     addToHistoryTable(repl_blk, choices, repl_blk_ID);
   }
@@ -247,6 +273,7 @@ DCCR::insertBlock(PacketPtr pkt, BlkType *blk)
 {
     BaseSetAssoc::insertBlock(pkt, blk);
     int set = extractSet(pkt->getAddr());
+    blk->mruBit = 1;
     sets[set].moveToTail(blk); //block should be inserted at tail
 }
 
@@ -265,6 +292,52 @@ DCCR*
 DCCRParams::create()
 {
     return new DCCR(this);
+}
+
+void
+DCCR::regStats(){
+
+  BaseSetAssoc::regStats();
+
+  using namespace Stats;
+
+  NMRU_uses
+      .name(name() + ".NMRU_uses")
+      .desc("number of times NMRU is used to evict")
+      .flags(none)
+      ;
+
+  LFU_uses
+      .name(name() + ".LFU_uses")
+      .desc("number of times LFU is used to evict")
+      .flags(none)
+      ;
+
+  FIFO_uses
+      .name(name() + ".FIFO_uses")
+      .desc("number of times FIFO is used to evict")
+      .flags(none)
+      ;
+
+  LIFO_uses
+      .name(name() + ".LIFO_uses")
+      .desc("number of times LIFO is used to evict")
+      .flags(none)
+      ;
+
+  findVictim_calls
+      .name(name() + ".findVictim_calls")
+      .desc("number of times findVictim is called")
+      .flags(none)
+      ;
+
+    stat_scores.init(num_policies);
+    stat_scores
+      .name(name() + ".scores_array")
+      .desc("score array after end of run [NMRU, LFU, FIFO, LIFO]")
+      .flags(none)
+      ;
+
 }
 
 unsigned int

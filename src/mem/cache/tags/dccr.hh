@@ -1,12 +1,12 @@
 #ifndef __MEM_CACHE_TAGS_DCCR_HH__
 #define __MEM_CACHE_TAGS_DCCR_HH__
 
-#include "mem/cache/tags/base_set_assoc.hh"
 
-#include "mem/cache/tags/fifo.hh"
-#include "mem/cache/tags/lfu.hh"
-#include "mem/cache/tags/lifo.hh"
-#include "mem/cache/tags/lru.hh"
+
+#include <vector>
+
+#include "base/statistics.hh"
+#include "mem/cache/tags/base_set_assoc.hh"
 #include "params/DCCR.hh"
 
 
@@ -30,7 +30,8 @@ class DCCR : public BaseSetAssoc
     typedef unsigned int Block_ID_t;
 
     unsigned int num_policies;
-    unsigned int scores[4] = {0, 0, 0 , 0};
+    unsigned int scores[4] = {0, 0, 0, 0};
+    Stats::Vector stat_scores;
     /*
     SetType* queue_sets;
 
@@ -85,12 +86,18 @@ class DCCR : public BaseSetAssoc
     //void LFU_insertBlock(PacketPtr pkt, BlkType *blk);
     void FIFO_insertBlock(PacketPtr pkt, BlkType *blk);
     //void LIFO_insertBlock(PacketPtr pkt, BlkType *blk);
+    Stats::Scalar NMRU_uses;
+    Stats::Scalar LFU_uses;
+    Stats::Scalar FIFO_uses;
+    Stats::Scalar LIFO_uses;
+    Stats::Scalar findVictim_calls;
 /*
     void NMRU_invalidate(BlkType *blk);
     void LFU_invalidate(BlkType *blk);
     void FIFO_invalidate(BlkType *blk);
     void LIFO_invalidate(BlkType *blk);
   */
+  virtual void regStats();
 };
 
 #endif // __MEM_CACHE_TAGS_DCCR_HH__
