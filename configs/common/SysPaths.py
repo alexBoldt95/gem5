@@ -38,7 +38,7 @@ def searchpath(path, filename):
         f = joinpath(p, filename)
         if os.path.exists(f):
             return f
-    raise IOError, "Can't find file '%s' on path." % filename
+    raise IOError, "Can't find file '%s' on path: '%s'." % (filename, path)
 
 def disk(filename):
     system()
@@ -57,7 +57,7 @@ def system():
         try:
             path = env['M5_PATH'].split(':')
         except KeyError:
-            path = [ '/dist/m5/system', '/n/poolfs/z/dist/m5/system' ]
+            path = [ '/dist/m5/system', '/usr/research/arch/users/apb34' ]
 
         # expand '~' and '~user' in paths
         path = map(os.path.expanduser, path)
