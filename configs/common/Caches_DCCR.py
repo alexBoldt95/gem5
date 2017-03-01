@@ -62,6 +62,7 @@ class L1_ICache(L1Cache):
     writeback_clean = True
 
 class L1_DCache(L1Cache):
+    DCCR()
     pass
 
 class L2Cache(Cache):

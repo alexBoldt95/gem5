@@ -123,6 +123,7 @@ class L2Cache(Cache):
     response_latency = 20
     mshrs = 20
     tgts_per_mshr = 12
+    tags = DCCR()
 
     SimpleOpts.add_option('--l2_size', help="L2 cache size. Default: %s" % size)
 

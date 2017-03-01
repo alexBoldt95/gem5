@@ -119,7 +119,7 @@ DCCR::NMRU_findVictim(Addr addr){
     int set = extractSet(addr);
     // grab a replacement candidate
 
-    BlkType *blk = nullptr;
+    blk = nullptr;
     for (int i = 0; i < assoc; i++) {
         BlkType *b = sets[set].blks[i];
         if (b->mruBit == 0) {
@@ -168,7 +168,7 @@ DCCR::FIFO_findVictim(Addr addr){
   if (blk->isValid()){
     int set = extractSet(addr);
     // grab a replacement candidate
-    BlkType *blk = sets[set].blks[0]; //get the front of the list
+    blk = sets[set].blks[0]; //get the front of the list
     assert(!blk || blk->way < allocAssoc);
 
     if (blk && blk->isValid()) {
@@ -186,7 +186,7 @@ DCCR::LIFO_findVictim(Addr addr){
     int set = extractSet(addr);
     // grab a replacement candidate
     //from the back of the list
-    BlkType *blk = nullptr;
+    blk = nullptr;
     for (int i = assoc - 1; i >= 0; i--) {
         BlkType *b = sets[set].blks[i];
         if (b->way < allocAssoc) {
@@ -234,7 +234,7 @@ DCCR::findVictim(Addr addr)
   choices[3] = sets[set].blks[0];
 */
   BlkType* repl_blk = choices[chosen_policy_idx];
-  if (repl_blk != nullptr){
+  if (repl_blk != nullptr && repl_blk->isValid()){
     if (chosen_policy_idx == 0){
       NMRU_uses++;
     } else if (chosen_policy_idx == 1){
